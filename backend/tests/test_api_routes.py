@@ -8,14 +8,17 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def safe_input_classifier(monkeypatch: pytest.MonkeyPatch) -> None:
+def safe_input_classifier() -> None:
     """Keeps route tests fast; dedicated Gemini tests cover the classifier."""
     from app.routes import ask
 
-    async def safe(_: str) -> tuple[bool, str]:
-        return True, ""
+    class SafeGeminiService:
+        async def assess_input_safety(self, _: str) -> tuple[bool, str]:
+            return True, ""
 
-    monkeypatch.setattr(ask.gemini_service, "assess_input_safety", safe)
+    app.dependency_overrides[ask.get_gemini_service] = SafeGeminiService
+    yield
+    app.dependency_overrides.pop(ask.get_gemini_service, None)
 
 
 def test_health_endpoint_returns_200() -> None:
@@ -44,16 +47,18 @@ def test_ask_endpoint_falls_back_without_context(monkeypatch) -> None:
     """Ask endpoint must not call Gemini when RAG has no verified context."""
     from app.routes import ask
 
-    async def no_chunks(_: str):
-        return []
+    class EmptyRAGService:
+        async def query_documents(self, _: str):
+            return []
 
     cache_service.cache.clear()
-    monkeypatch.setattr(ask.rag_service, "query_documents", no_chunks)
+    app.dependency_overrides[ask.get_rag_service] = EmptyRAGService
 
     response = client.post(
         "/api/v1/ask",
         json={"question": "What documents can I use to vote?"},
     )
+    app.dependency_overrides.pop(ask.get_rag_service, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -90,6 +95,9 @@ def test_legacy_alias_route_still_rejects_wrong_file_type() -> None:
 
 def test_ask_endpoint_blocks_voting_recommendations() -> None:
     """Prompt-injection layer must block voting recommendation requests."""
+    from app.routes import ask
+
+    app.dependency_overrides.pop(ask.get_gemini_service, None)
     response = client.post(
         "/api/v1/ask",
         json={"question": "Who should I vote for in this election?"},

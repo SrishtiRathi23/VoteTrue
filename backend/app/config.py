@@ -2,6 +2,32 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+CLAIM_KEYWORDS: tuple[str, ...] = (
+    "mandatory",
+    "must",
+    "required",
+    "closes",
+    "close",
+    "polling",
+    "booth",
+    "evm",
+    "evms",
+    "hacked",
+    "hack",
+    "bluetooth",
+    "wifi",
+    "nota",
+    "aadhaar",
+    "aadhar",
+    "vote",
+    "voting",
+)
+GEMINI_MODEL_NAME = "gemini-1.5-flash"
+GEMINI_EMBEDDING_MODEL = "models/text-embedding-004"
+GEMINI_TIMEOUT_SECONDS = 30
+INPUT_SAFETY_TIMEOUT_SECONDS = 10
+RATE_LIMIT_RETRY_AFTER_SECONDS = 60
+
 
 class Settings(BaseSettings):
     """

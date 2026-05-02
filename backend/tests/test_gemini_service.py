@@ -64,7 +64,7 @@ async def test_verify_claim_returns_unverifiable_on_failure(
     from app.services import gemini_service
 
     mock_model = MagicMock()
-    mock_model.generate_content.side_effect = Exception("Gemini down")
+    mock_model.generate_content.side_effect = RuntimeError("Gemini down")
     monkeypatch.setattr(gemini_service, "model", mock_model)
 
     result = await gemini_service.verify_single_claim(
@@ -86,7 +86,7 @@ async def test_verify_claim_fallback_preserves_similarity_confidence(
     from app.services import gemini_service
 
     mock_model = MagicMock()
-    mock_model.generate_content.side_effect = Exception("Gemini down")
+    mock_model.generate_content.side_effect = RuntimeError("Gemini down")
     monkeypatch.setattr(gemini_service, "model", mock_model)
 
     result = await gemini_service.verify_single_claim(
@@ -202,18 +202,18 @@ async def test_input_safety_classifier_uses_cache(
 
 
 @pytest.mark.asyncio
-async def test_input_safety_classifier_fails_open_to_keyword_guard(
+async def test_input_safety_classifier_fails_closed_when_offline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Classifier outages must not crash the route; keyword guard remains active."""
+    """Classifier outages must reject requests instead of failing open."""
     from app.services import gemini_service
 
     mock_model = MagicMock()
-    mock_model.generate_content.side_effect = Exception("Gemini down")
+    mock_model.generate_content.side_effect = RuntimeError("Gemini down")
     monkeypatch.setattr(gemini_service, "model", mock_model)
     gemini_service.cache_service.cache.clear()
 
     is_safe, reason = await gemini_service.assess_input_safety("What ID can I use?")
 
-    assert is_safe is True
-    assert "classifier unavailable" in reason
+    assert is_safe is False
+    assert "Safety system offline" in reason

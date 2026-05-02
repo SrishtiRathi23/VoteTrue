@@ -174,7 +174,7 @@ async def verify_queries() -> bool:
     ]
     all_passed = True
     for query in queries:
-        chunks = await rag_service.query_documents(query, n_results=1)
+        chunks = await rag_service.RAGService().query_documents(query, n_results=1)
         if not chunks or chunks[0].similarity < 0.3:
             all_passed = False
             print(f"VERIFY FAIL: {query}")

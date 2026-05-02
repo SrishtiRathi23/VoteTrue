@@ -1,154 +1,67 @@
 import asyncio
 import hashlib
-import json
-from pathlib import Path
 from typing import Any
 
-from app.config import get_settings
+from app.config import GEMINI_EMBEDDING_MODEL, get_settings
 from app.data.eci_seed import ECI_SEED_CHUNKS
 from app.models.response_models import RetrievedChunk
+from app.services.vector_store import get_vector_collection
 from app.utils.logger import get_logger
 
 settings = get_settings()
 logger = get_logger(__name__)
 
 try:
+    from google.api_core.exceptions import GoogleAPIError
     import google.generativeai as genai
 except ImportError:
+    GoogleAPIError = RuntimeError
     genai = None
 
 if settings.gemini_api_key and genai is not None:
     genai.configure(api_key=settings.gemini_api_key)
 
 
-class LocalCollection:
-    """Tiny ChromaDB-compatible fallback used when ChromaDB is unavailable."""
+collection = get_vector_collection()
 
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._rows: list[dict[str, Any]] = []
-        self._load()
 
-    def _load(self) -> None:
-        """Loads persisted local rows from disk."""
-        if not self._path.exists():
-            return
-        try:
-            self._rows = json.loads(self._path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            logger.warning("local_collection_load_failed error=%s", str(exc))
-            self._rows = []
+class RAGService:
+    """Dependency-injected retrieval service for ECI document grounding."""
 
-    def _save(self) -> None:
-        """Persists local rows to disk."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(self._rows, indent=2), encoding="utf-8")
+    def __init__(self, vector_collection: Any = collection) -> None:
+        """
+        Initialize the retrieval service.
 
-    def add(
+        Args:
+            vector_collection: ChromaDB-compatible collection implementation.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        self.collection = vector_collection
+
+    async def query_documents(
         self,
-        ids: list[str],
-        embeddings: list[list[float]],
-        documents: list[str],
-        metadatas: list[dict[str, Any]],
-    ) -> None:
-        for row_id, embedding, document, metadata in zip(
-            ids, embeddings, documents, metadatas
-        ):
-            self._rows.append(
-                {
-                    "id": row_id,
-                    "embedding": embedding,
-                    "document": document,
-                    "metadata": metadata,
-                }
-            )
-        self._save()
+        query: str,
+        n_results: int = 5,
+    ) -> list[RetrievedChunk]:
+        """
+        Retrieve relevant ECI document chunks.
 
-    def upsert(
-        self,
-        ids: list[str],
-        embeddings: list[list[float]],
-        documents: list[str],
-        metadatas: list[dict[str, Any]],
-    ) -> None:
-        """Adds or replaces rows by id."""
-        incoming = dict(zip(ids, zip(embeddings, documents, metadatas)))
-        self._rows = [row for row in self._rows if row["id"] not in incoming]
-        for row_id, (embedding, document, metadata) in incoming.items():
-            self._rows.append(
-                {
-                    "id": row_id,
-                    "embedding": embedding,
-                    "document": document,
-                    "metadata": metadata,
-                }
-            )
-        self._save()
+        Args:
+            query: User question or extracted claim.
+            n_results: Maximum number of chunks to return.
 
-    def count(self) -> int:
-        """Returns total stored chunks."""
-        self._load()
-        return len(self._rows)
+        Returns:
+            Relevant ECI document chunks or source-backed seed fallback chunks.
 
-    def delete_source(self, source_file: str) -> None:
-        """Deletes rows for a source file before idempotent re-ingestion."""
-        self._rows = [
-            row
-            for row in self._rows
-            if row.get("metadata", {}).get("source_file") != source_file
-        ]
-        self._save()
-
-    def query(
-        self,
-        query_embeddings: list[list[float]],
-        n_results: int,
-        include: list[str],
-    ) -> dict[str, list[list[Any]]]:
-        self._load()
-        rows = self._rank_rows(query_embeddings[0])[:n_results]
-        return {
-            "documents": [[row["document"] for row in rows]],
-            "metadatas": [[row["metadata"] for row in rows]],
-            "distances": [[row["distance"] for row in rows]],
-        }
-
-    def _rank_rows(self, query_embedding: list[Any]) -> list[dict[str, Any]]:
-        """Ranks rows using word overlap when ChromaDB is unavailable."""
-        stopwords = {"what", "can", "i", "to", "the", "are", "is", "be", "a", "an"}
-        query_terms = self._terms(str(query_embedding[-1])) - stopwords if query_embedding else set()
-        ranked = []
-        for row in self._rows:
-            text_terms = self._terms(str(row["document"])) - stopwords
-            overlap = len(query_terms & text_terms)
-            distance = 0.2 if overlap else 0.65
-            ranked.append({**row, "distance": max(0.05, distance - min(overlap, 10) * 0.01)})
-        return sorted(ranked, key=lambda row: row["distance"])
-
-    def _terms(self, text: str) -> set[str]:
-        """Normalizes text into searchable terms with common election synonyms."""
-        terms = set(text.lower().replace("?", " ").replace(".", " ").split())
-        if "id" in terms:
-            terms.update({"identity", "identification", "documents", "document"})
-        if "evms" in terms or "evm" in terms:
-            terms.update({"evm", "evms", "hack", "hacked", "networked"})
-        if "hours" in terms or "booth" in terms:
-            terms.update({"polling", "poll", "schedule", "hours"})
-        return terms
-
-CHROMA_PATH = Path(__file__).resolve().parents[2] / "chroma_db"
-try:
-    import chromadb
-
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-    collection = chroma_client.get_or_create_collection(
-        name="eci_documents",
-        metadata={"hnsw:space": "cosine"},
-    )
-except Exception as exc:
-    logger.warning("chromadb_unavailable_using_local_collection error=%s", str(exc))
-    chroma_client = None
-    collection = LocalCollection(CHROMA_PATH / "local_collection.json")
+        Raises:
+            None.
+        """
+        return await _query_documents_impl(query, n_results, self.collection)
 
 
 async def embed_text(text: str) -> list[float]:
@@ -161,14 +74,31 @@ async def embed_text(text: str) -> list[float]:
 
     Returns:
         List of floats representing the embedding.
+
+    Raises:
+        GoogleAPIError: Propagates Gemini embedding failures after logging.
+        RuntimeError: Raised when the local SDK call fails unexpectedly.
     """
 
     def _embed() -> list[float]:
+        """
+        Generate the embedding inside a worker thread.
+
+        Args:
+            None.
+
+        Returns:
+            Gemini embedding values, or a deterministic local surrogate.
+
+        Raises:
+            GoogleAPIError: Propagates Gemini embedding failures to the caller.
+            RuntimeError: Raised when local embedding generation fails unexpectedly.
+        """
         if genai is None or not settings.gemini_api_key:
             digest = hashlib.sha256(text.encode()).digest()
             return [byte / 255 for byte in digest[:16]] + [text.lower()]
         result = genai.embed_content(
-            model="models/text-embedding-004",
+            model=GEMINI_EMBEDDING_MODEL,
             content=text,
         )
         embedding = result["embedding"]
@@ -176,13 +106,25 @@ async def embed_text(text: str) -> list[float]:
 
     try:
         return await asyncio.to_thread(_embed)
-    except Exception as exc:
+    except (GoogleAPIError, RuntimeError, ValueError, KeyError, TypeError) as exc:
         logger.error("embedding_failed error=%s", str(exc))
         raise
 
 
 def _metadata_value(metadata: dict[str, Any], *keys: str) -> Any:
-    """Returns the first present metadata value from a list of keys."""
+    """
+    Return the first present metadata value from a list of keys.
+
+    Args:
+        metadata: Metadata mapping from ChromaDB or local fallback storage.
+        *keys: Candidate metadata keys in preferred order.
+
+    Returns:
+        First matching metadata value, or None.
+
+    Raises:
+        None.
+    """
     for key in keys:
         if key in metadata:
             return metadata[key]
@@ -190,7 +132,18 @@ def _metadata_value(metadata: dict[str, Any], *keys: str) -> Any:
 
 
 def _query_terms(text: str) -> set[str]:
-    """Normalizes user text into simple retrieval terms."""
+    """
+    Normalize user text into simple retrieval terms.
+
+    Args:
+        text: User query or extracted claim.
+
+    Returns:
+        Lowercase retrieval terms with selected synonyms.
+
+    Raises:
+        None.
+    """
     cleaned = text.lower()
     for mark in ",.?;:!()[]{}":
         cleaned = cleaned.replace(mark, " ")
@@ -203,7 +156,19 @@ def _query_terms(text: str) -> set[str]:
 
 
 def _seed_results(query: str, n_results: int) -> list[RetrievedChunk]:
-    """Returns source-backed seed chunks when ChromaDB has no relevant rows."""
+    """
+    Return source-backed seed chunks when vector retrieval is unavailable.
+
+    Args:
+        query: User query or extracted claim.
+        n_results: Maximum number of chunks to return.
+
+    Returns:
+        RetrievedChunk objects sourced from built-in ECI seed content.
+
+    Raises:
+        None.
+    """
     terms = _query_terms(query)
     ranked: list[tuple[int, RetrievedChunk]] = []
     for seed in ECI_SEED_CHUNKS:
@@ -229,7 +194,11 @@ def _seed_results(query: str, n_results: int) -> list[RetrievedChunk]:
     return [chunk for _, chunk in sorted(ranked, key=lambda item: item[0], reverse=True)[:n_results]]
 
 
-async def query_documents(query: str, n_results: int = 5) -> list[RetrievedChunk]:
+async def _query_documents_impl(
+    query: str,
+    n_results: int = 5,
+    vector_collection: Any = collection,
+) -> list[RetrievedChunk]:
     """
     Retrieves the top-n most relevant ECI document chunks for a given query using
     cosine similarity search.
@@ -239,13 +208,17 @@ async def query_documents(query: str, n_results: int = 5) -> list[RetrievedChunk
         n_results: Number of chunks to retrieve.
 
     Returns:
-        Relevant ECI document chunks. Returns [] on any dependency failure.
+        Relevant ECI document chunks. Dependency failures return matching
+        built-in ECI seed chunks where keywords support a grounded fallback.
+
+    Raises:
+        None.
     """
     try:
         query_embedding = await embed_text(query)
 
         results = await asyncio.to_thread(
-            collection.query,
+            vector_collection.query,
             query_embeddings=[query_embedding],
             n_results=n_results,
             include=["documents", "metadatas", "distances"],
@@ -283,7 +256,15 @@ async def query_documents(query: str, n_results: int = 5) -> list[RetrievedChunk
             logger.info("rag_retrieved count=%s", len(relevant_chunks))
         return relevant_chunks
 
-    except Exception as exc:
+    except (
+        asyncio.TimeoutError,
+        GoogleAPIError,
+        RuntimeError,
+        OSError,
+        ValueError,
+        TypeError,
+        KeyError,
+    ) as exc:
         logger.error("rag_query_failed error=%s", str(exc))
         return _seed_results(query, n_results)
 
@@ -301,6 +282,13 @@ async def add_document_chunk(
         chunk_id: Unique identifier for this chunk.
         text: The text content of the chunk.
         metadata: Dict with document_name, page_number, section.
+
+    Returns:
+        None.
+
+    Raises:
+        Exception: Propagates embedding or collection write failures to the
+            ingestion caller.
     """
     embedding = await embed_text(text)
     writer = collection.upsert if hasattr(collection, "upsert") else collection.add

@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.config import get_settings
+from app.config import RATE_LIMIT_RETRY_AFTER_SECONDS, get_settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -15,6 +15,8 @@ try:
     import redis.asyncio as redis_async
 except ImportError:
     redis_async = None
+
+RedisError = redis_async.RedisError if redis_async is not None else RuntimeError
 
 
 class RateLimiterMiddleware(BaseHTTPMiddleware):
@@ -52,6 +54,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests. Please wait a moment."},
+                    headers={"Retry-After": str(RATE_LIMIT_RETRY_AFTER_SECONDS)},
                 )
             return await call_next(request)
 
@@ -75,6 +78,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please wait a moment."},
+                headers={"Retry-After": str(RATE_LIMIT_RETRY_AFTER_SECONDS)},
             )
 
         self.request_counts[client_ip].append(now)
@@ -104,6 +108,6 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 )
                 return False
             return True
-        except Exception as exc:
-            logger.warning("redis_rate_limiter_unavailable error=%s", str(exc))
+        except (RedisError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logger.critical("redis_rate_limiter_unavailable_failing_open error=%s", str(exc))
             return True

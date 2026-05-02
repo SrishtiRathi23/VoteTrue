@@ -1,8 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.config import Settings, get_settings
 from app.models.request_models import AskRequest
 from app.models.response_models import AskResponse
-from app.services import cache_service, gemini_service, rag_service
+from app.services import cache_service, gemini_service
+from app.services.gemini_service import GeminiService
+from app.services.rag_service import RAGService
 from app.utils.logger import get_logger
 from app.utils.validators import reject_prompt_injection
 
@@ -10,17 +13,63 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def get_gemini_service(settings: Settings = Depends(get_settings)) -> GeminiService:
+    """
+    Provide a request-scoped Gemini service.
+
+    Args:
+        settings: Application settings supplied by FastAPI.
+
+    Returns:
+        Configured GeminiService instance.
+
+    Raises:
+        None.
+    """
+    return GeminiService(settings)
+
+
+def get_rag_service() -> RAGService:
+    """
+    Provide a request-scoped RAG service.
+
+    Args:
+        None.
+
+    Returns:
+        Configured RAGService instance.
+
+    Raises:
+        None.
+    """
+    return RAGService()
+
+
 @router.post("/ask", response_model=AskResponse)
-async def ask_votetrue(request: AskRequest) -> AskResponse:
+async def ask_votetrue(
+    request: AskRequest,
+    gemini: GeminiService = Depends(get_gemini_service),
+    rag: RAGService = Depends(get_rag_service),
+) -> AskResponse:
     """
     Core Ask VoteTrue endpoint. Accepts a voter question, retrieves relevant ECI
     document chunks via RAG, and returns a Gemini-generated cited answer.
 
     Rate limited to 20 requests/minute per IP.
     Results cached for 1 hour for identical queries.
+
+    Args:
+        request: Validated voter question and language preference.
+
+    Returns:
+        Cited answer with confidence, sources, and response language.
+
+    Raises:
+        HTTPException: If the request is rejected by prompt-injection or safety
+            controls.
     """
     reject_prompt_injection(request.question)
-    is_safe, reason = await gemini_service.assess_input_safety(request.question)
+    is_safe, reason = await gemini.assess_input_safety(request.question)
     if not is_safe:
         logger.warning("ask_input_rejected_by_safety_classifier reason=%s", reason)
         raise HTTPException(
@@ -34,7 +83,7 @@ async def ask_votetrue(request: AskRequest) -> AskResponse:
         logger.info("ask_cache_returned")
         return AskResponse(**cached)
 
-    context_chunks = await rag_service.query_documents(request.question)
+    context_chunks = await rag.query_documents(request.question)
 
     if not context_chunks:
         return AskResponse(
@@ -48,7 +97,7 @@ async def ask_votetrue(request: AskRequest) -> AskResponse:
             language=request.language,
         )
 
-    result = await gemini_service.generate_answer(
+    result = await gemini.generate_answer(
         question=request.question,
         context_chunks=context_chunks,
         language=request.language,

@@ -7,10 +7,10 @@ async def test_query_returns_empty_list_on_failure(monkeypatch: pytest.MonkeyPat
     from app.services import rag_service
 
     async def fail_embed(_: str) -> list[float]:
-        raise Exception("API down")
+        raise RuntimeError("API down")
 
     monkeypatch.setattr(rag_service, "embed_text", fail_embed)
-    result = await rag_service.query_documents("test query")
+    result = await rag_service.RAGService().query_documents("test query")
     assert result == []
 
 
@@ -32,7 +32,7 @@ async def test_query_filters_low_relevance_chunks(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(rag_service, "embed_text", fake_embed)
     monkeypatch.setattr(rag_service.collection, "query", fake_query)
 
-    result = await rag_service.query_documents("polling hours")
+    result = await rag_service.RAGService().query_documents("polling hours")
     assert len(result) == 1
     assert result[0].text == "relevant chunk"
     assert result[0].document_name == "ECI Doc"
@@ -54,7 +54,7 @@ async def test_query_uses_seed_corpus_when_collection_is_empty(
     monkeypatch.setattr(rag_service, "embed_text", fake_embed)
     monkeypatch.setattr(rag_service.collection, "query", empty_query)
 
-    result = await rag_service.query_documents("What ID can I use to vote?")
+    result = await rag_service.RAGService().query_documents("What ID can I use to vote?")
 
     assert result
     assert result[0].document_name.startswith("ECI")

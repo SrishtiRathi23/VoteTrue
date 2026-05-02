@@ -11,6 +11,15 @@ async def health_check() -> HealthResponse:
     """
     Health check endpoint. Confirms all services are configured.
     Used by Cloud Run to verify container is healthy.
+
+    Args:
+        None.
+
+    Returns:
+        HealthResponse with environment and service configuration status.
+
+    Raises:
+        None.
     """
     settings = get_settings()
     return HealthResponse(
@@ -27,5 +36,16 @@ async def health_check() -> HealthResponse:
 
 @router.head("/health")
 async def health_head() -> None:
-    """HEAD variant for curl -I and load balancer header checks."""
+    """
+    Serve the HEAD variant for curl and load balancer checks.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+
+    Raises:
+        None.
+    """
     return None

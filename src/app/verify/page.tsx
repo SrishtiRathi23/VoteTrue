@@ -208,6 +208,8 @@ export default function VerifyPage() {
           </div>
 
           <input
+            aria-describedby="verify-file-help"
+            aria-label="Upload WhatsApp forward image"
             accept="image/jpeg,image/png,image/webp"
             className="sr-only"
             onChange={(event) => {
@@ -278,6 +280,7 @@ function SourcePanel({
         <span>Source - Original forward</span>
         {showReset ? (
           <button
+            aria-label="Start new verification"
             onClick={onReset}
             style={{
               background: "none",
@@ -361,7 +364,11 @@ function ResultsPanel({
   stage: "idle" | "extracting" | "identifying" | "checking" | "done";
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div
+      aria-busy={stage !== "idle" && stage !== "done" ? "true" : undefined}
+      aria-live={stage !== "idle" && stage !== "done" ? "polite" : undefined}
+      style={{ display: "flex", flexDirection: "column" }}
+    >
       <div
         style={{
           alignItems: "center",
@@ -412,7 +419,7 @@ function IdleState({
           <button className="btn civic" onClick={onSample} type="button">
             Use sample forward <span className="arrow">-&gt;</span>
           </button>
-          <button className="btn" onClick={onUpload} type="button">
+          <button aria-describedby="verify-file-help" className="btn" onClick={onUpload} type="button">
             Upload image
           </button>
         </div>
@@ -432,7 +439,7 @@ function ErrorState({ message, onUpload }: { message: string; onUpload: () => vo
           Verification paused
         </div>
         <p style={{ fontSize: 15, marginTop: 12 }}>{message}</p>
-        <button className="btn" onClick={onUpload} style={{ marginTop: 18 }} type="button">
+        <button aria-describedby="verify-file-help" className="btn" onClick={onUpload} style={{ marginTop: 18 }} type="button">
           Try another image
         </button>
       </div>
@@ -450,7 +457,7 @@ const stages = [
 function ProgressState({ current }: { current: string }) {
   const currentIndex = stages.findIndex((stage) => stage.id === current);
   return (
-    <div aria-live="polite" role="status" style={{ display: "flex", flex: 1, flexDirection: "column", justifyContent: "center", padding: 40 }}>
+    <div aria-busy="true" aria-live="polite" role="status" style={{ display: "flex", flex: 1, flexDirection: "column", justifyContent: "center", padding: 40 }}>
       <div className="eyebrow" style={{ color: "var(--civic-ink)", marginBottom: 22 }}>
         Verifying...
       </div>

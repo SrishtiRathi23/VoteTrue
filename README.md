@@ -6,7 +6,7 @@
 [![API Health](https://img.shields.io/badge/API-Healthy-22C55E?style=for-the-badge)](https://votetrue-backend-b7s5qa47aa-el.a.run.app/api/v1/health)
 [![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com)
 [![Gemini](https://img.shields.io/badge/AI-Gemini%201.5%20Flash-0F6E56?style=for-the-badge)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/Tests-25%20passed-22C55E?style=for-the-badge)]()
+[![Tests](https://img.shields.io/badge/Tests-33%20passed-22C55E?style=for-the-badge)]()
 [![Coverage](https://img.shields.io/badge/Coverage-71%25-16A34A?style=for-the-badge)]()
 
 ---
@@ -122,6 +122,14 @@ Full prompt documentation: [`backend/docs/prompt-library.md`](backend/docs/promp
 
 ---
 
+## Technical Integrity
+
+VoteTrue is engineered as a production civic verification system, not a template demo. The backend supports Redis-backed distributed cache state through `REDIS_URL`, while retaining an in-process fallback so local development and partial outages remain reliable. Rate limiting, answer caching, and safety-classifier results share the same cache abstraction, which keeps Cloud Run instances fast without making Redis a single point of failure.
+
+The verification layer uses Honest RAG scoring: confidence is derived from retrieval similarity and source coverage, not artificial score floors. If the vector database is empty, offline, or times out, VoteTrue falls back only to built-in ECI seed chunks with explicit `built_in_eci_seed` metadata. If Gemini returns malformed JSON or fails during claim verification, the system returns `UNVERIFIABLE` with source context instead of inventing a verdict.
+
+---
+
 ## 📡 API Reference
 
 | Method | Endpoint | Description |
@@ -216,7 +224,7 @@ npm run build         # Production build
 
 # Backend
 cd backend
-pytest tests/ -v --tb=short                    # 25 tests
+pytest tests/ -v --tb=short                    # 33 tests
 pytest tests/ --cov=app --cov-report=term-missing  # 71% coverage
 python -m compileall app tests scripts         # Syntax check
 ```
@@ -229,7 +237,7 @@ python -m compileall app tests scripts         # Syntax check
 | TypeScript | ✅ Passed |
 | Next.js build | ✅ Passed |
 | Python compile | ✅ Passed |
-| pytest (25 tests) | ✅ All passed |
+| pytest (33 tests) | ✅ All passed |
 | Coverage | ✅ 71% |
 
 ---

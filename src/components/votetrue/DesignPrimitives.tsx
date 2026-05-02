@@ -1,6 +1,9 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { AuthStatus } from "@/components/votetrue/AuthStatus";
+import { useId } from "react";
 
 export type VerdictKind = "true" | "misleading" | "unverifiable";
 
@@ -91,12 +94,14 @@ export function SourceChip({ doc, page }: { doc: string; page?: string | number 
 }
 
 export function Confidence({ value, label = "Confidence" }: { value: number; label?: string }) {
+  const labelId = useId();
   const clamped = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <div className="conf">
-      <span>{label}</span>
+      <span id={labelId}>{label}</span>
       <div
         aria-label={`${label} ${clamped} percent`}
+        aria-labelledby={labelId}
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={clamped}

@@ -11,10 +11,11 @@ async def test_extract_text_returns_empty_string_on_api_error(
     from app.services import vision_service
 
     mock_client = MagicMock()
-    mock_client.text_detection.side_effect = Exception("Vision API down")
-    monkeypatch.setattr(vision_service, "vision_client", mock_client)
+    mock_client.text_detection.side_effect = RuntimeError("Vision API down")
 
-    result = await vision_service.extract_text_from_image(b"fake image bytes")
+    result = await vision_service.VisionService(mock_client).extract_text_from_image(
+        b"fake image bytes"
+    )
     assert result == ""
 
 
@@ -29,7 +30,8 @@ async def test_extract_text_returns_detected_text(monkeypatch: pytest.MonkeyPatc
 
     mock_client = MagicMock()
     mock_client.text_detection.return_value = response
-    monkeypatch.setattr(vision_service, "vision_client", mock_client)
 
-    result = await vision_service.extract_text_from_image(b"fake image bytes")
+    result = await vision_service.VisionService(mock_client).extract_text_from_image(
+        b"fake image bytes"
+    )
     assert result == "Detected WhatsApp forward text"

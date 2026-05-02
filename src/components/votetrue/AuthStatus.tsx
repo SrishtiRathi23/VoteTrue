@@ -31,7 +31,7 @@ export function AuthStatus() {
       <span aria-hidden="true" className="auth-avatar">
         {user.picture ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img alt="" src={user.picture} />
+          <img alt={`${user.name} profile avatar`} src={user.picture} />
         ) : (
           user.name.slice(0, 1).toUpperCase()
         )}
