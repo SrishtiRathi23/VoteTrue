@@ -9,17 +9,30 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section className="container py-16">
+    <section className="container" style={{ padding: "64px 28px" }}>
       <Eyebrow num="02">How verification works</Eyebrow>
-      <h2 className="mt-4 max-w-[720px] text-[34px] tracking-normal">
+      <h2 style={{ fontSize: 34, letterSpacing: "-0.018em", marginTop: 14, maxWidth: 720 }}>
         A four-step process. No magic, no chatbot - just careful comparison.
       </h2>
-      <div className="mt-10 grid overflow-hidden rounded-lg border border-[var(--rule)] bg-[var(--rule)] gap-px md:grid-cols-4">
+      <div
+        style={{
+          background: "var(--rule)",
+          border: "1px solid var(--rule)",
+          borderRadius: 8,
+          display: "grid",
+          gap: 1,
+          gridTemplateColumns: "repeat(4, 1fr)",
+          marginTop: 40,
+          overflow: "hidden",
+        }}
+      >
         {steps.map(([n, title, body]) => (
-          <div className="bg-[var(--paper)] p-7" key={n}>
-            <div className="eyebrow text-[var(--civic-ink)]">{n}</div>
-            <h3 className="mb-3 mt-4 text-lg">{title}</h3>
-            <p className="text-[13.5px] text-[var(--ink-2)]">{body}</p>
+          <div key={n} style={{ background: "var(--paper)", padding: 28 }}>
+            <div className="eyebrow" style={{ color: "var(--civic-ink)" }}>
+              {n}
+            </div>
+            <h3 style={{ fontSize: 18, marginBottom: 10, marginTop: 14 }}>{title}</h3>
+            <p style={{ color: "var(--ink-2)", fontSize: 13.5 }}>{body}</p>
           </div>
         ))}
       </div>
