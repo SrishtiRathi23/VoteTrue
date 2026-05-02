@@ -58,6 +58,7 @@ async def test_verify_single_claim_malformed_gemini_json_returns_unverifiable(
     """Malformed Gemini JSON must become UNVERIFIABLE instead of crashing."""
     from app.models.response_models import RetrievedChunk
     from app.services import gemini_service
+    from app.services.gemini_service import GeminiService
 
     def raise_json_decode_error(_: str) -> object:
         raise json.JSONDecodeError("bad json", "{", 0)
@@ -66,10 +67,9 @@ async def test_verify_single_claim_malformed_gemini_json_returns_unverifiable(
     mock_response.text = "{"
     mock_model = MagicMock()
     mock_model.generate_content.return_value = mock_response
-    monkeypatch.setattr(gemini_service, "model", mock_model)
     monkeypatch.setattr(gemini_service.json, "loads", raise_json_decode_error)
 
-    result = await gemini_service.verify_single_claim(
+    result = await GeminiService(active_model=mock_model).verify_single_claim(
         "Aadhaar is mandatory to vote.",
         [
             RetrievedChunk(
@@ -91,15 +91,14 @@ async def test_extract_claims_empty_text_after_malformed_json_returns_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Empty OCR text plus malformed JSON must return no claims, not an error."""
-    from app.services import gemini_service
+    from app.services.gemini_service import GeminiService
 
     mock_response = MagicMock()
     mock_response.text = "{"
     mock_model = MagicMock()
     mock_model.generate_content.return_value = mock_response
-    monkeypatch.setattr(gemini_service, "model", mock_model)
 
-    result = await gemini_service.extract_claims_from_text("")
+    result = await GeminiService(active_model=mock_model).extract_claims_from_text("")
 
     assert result == []
 

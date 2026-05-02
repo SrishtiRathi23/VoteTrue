@@ -95,7 +95,7 @@ flowchart TD
 
 | Layer | Technology | Why |
 |---|---|---|
-| **Frontend** | Next.js 14 + TypeScript + Tailwind CSS | Type-safe, server-optimised, static export for /myths |
+| **Frontend** | Next.js 14 + TypeScript + custom civic design system | Type-safe, server-optimised, polished app UI with reusable primitives |
 | **Backend** | FastAPI + Python 3.11 | Async-first, fast startup, strongly typed with Pydantic |
 | **AI Generation** | Gemini 1.5 Flash | Fast, grounded generation with citation support |
 | **Embeddings** | Gemini `text-embedding-004` | Native Google embeddings for ECI corpus |
@@ -124,9 +124,16 @@ Full prompt documentation: [`backend/docs/prompt-library.md`](backend/docs/promp
 
 ## Technical Integrity
 
-VoteTrue is engineered as a production civic verification system, not a template demo. The backend supports Redis-backed distributed cache state through `REDIS_URL`, while retaining an in-process fallback so local development and partial outages remain reliable. Rate limiting, answer caching, and safety-classifier results share the same cache abstraction, which keeps Cloud Run instances fast without making Redis a single point of failure.
+VoteTrue is engineered as a production civic verification system, not a template demo. The backend supports Redis-backed distributed cache state through `REDIS_URL`, while retaining an in-process fallback so local development and partial outages remain reliable. Answer caching and safety-classifier results share the same cache abstraction, and the rate limiter preserves availability if Redis has a transient outage.
 
 The verification layer uses Honest RAG scoring: confidence is derived from retrieval similarity and source coverage, not artificial score floors. If the vector database is empty, offline, or times out, VoteTrue falls back only to built-in ECI seed chunks with explicit `built_in_eci_seed` metadata. If Gemini returns malformed JSON or fails during claim verification, the system returns `UNVERIFIABLE` with source context instead of inventing a verdict.
+
+Final reliability checks covered by tests:
+- Malformed Gemini JSON returns fallback claims or `UNVERIFIABLE`, never a crash.
+- RAG/vector-store outage falls back to built-in ECI seed chunks.
+- Redis cache outage uses an in-process memory fallback.
+- Redis rate-limiter outage fails open for availability while logging a critical warning.
+- Upload validation rejects invalid or corrupted images before OCR.
 
 ---
 
@@ -287,7 +294,7 @@ votetrue/
 │   │   ├── models/             # Pydantic request/response models
 │   │   ├── prompts/            # Versioned system prompts
 │   │   └── config.py           # Settings via pydantic-settings
-│   ├── tests/                  # 25 unit tests
+│   ├── tests/                  # 33 unit tests
 │   ├── docs/                   # Prompt library documentation
 │   └── Dockerfile              # python:3.11-slim, non-root user
 ├── public/
@@ -328,10 +335,10 @@ curl -X POST https://votetrue-backend-b7s5qa47aa-el.a.run.app/api/v1/ask \
 
 | Criterion | Implementation |
 |---|---|
-| **Code Quality** | Modular routes/services/models/prompts, full TypeScript, Pydantic models |
+| **Code Quality** | Modular routes/services/models/prompts, focused service classes, full TypeScript, Pydantic models |
 | **Security** | Secret Manager, `.env` gitignored, upload validation, security headers, CORS |
 | **Efficiency** | RAG retrieval (not full-doc search), response caching, optional Redis, Cloud Run auto-scale |
-| **Testing** | 25 unit tests covering RAG, Gemini, Vision, API routes, security, rate limiting |
+| **Testing** | 33 unit tests covering RAG, Gemini, Vision, API routes, edge cases, security, rate limiting |
 | **Accessibility** | Semantic HTML, ARIA labels, aria-live regions, role="alert", skip link, focus states |
 | **Google Services** | Gemini 1.5 Flash, text-embedding-004, Cloud Vision, Cloud Run ×2, Cloud Build, Secret Manager, Cloud Logging |
 | **Prompt Engineering** | Versioned prompts, neutrality enforcement, UNVERIFIABLE fallback, two-layer injection defence, citation grounding |

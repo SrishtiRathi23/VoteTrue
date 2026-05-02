@@ -16,9 +16,21 @@ Do not paste API keys or service-account JSON into this file.
 - Honest similarity-based confidence scoring.
 - `UNVERIFIABLE` fallback when source context is weak or missing.
 - Two-layer prompt-injection defense.
+- 33-test backend suite covering malformed Gemini JSON, RAG outage fallback, Redis failures, upload validation, security headers, and rate limiting.
 - Optional Google login with guest-first access.
 - Redis/MemoryStore-ready rate limiting and cache for Cloud Run scalability.
 - Google services: Gemini, embeddings, Vision OCR, Cloud Run, Cloud Build, Secret Manager, Cloud Logging, Google Identity Services.
+
+## Final Evaluation Signals
+
+| Signal | Evidence |
+| --- | --- |
+| Production reliability | RAG/vector-store outages fall back to built-in ECI seed chunks instead of crashing |
+| Security behavior | Gemini safety-classifier outages fail closed with a clear rejection reason |
+| Availability behavior | Redis rate-limiter outages preserve access while logging a critical warning |
+| Schema clarity | Pydantic responses include field descriptions and OpenAPI examples |
+| UI quality | Homepage is split into focused components while preserving the polished custom design system |
+| Test depth | 33 backend tests pass, including edge cases for malformed JSON and service outages |
 
 ## What to Test
 

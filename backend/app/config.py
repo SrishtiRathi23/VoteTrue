@@ -63,6 +63,7 @@ def _secret_manager_gemini_key(settings: Settings) -> str | None:
     if settings.environment != "production" or not settings.google_cloud_project:
         return None
     try:
+        from google.api_core.exceptions import GoogleAPIError
         from google.cloud import secretmanager
 
         client = secretmanager.SecretManagerServiceClient()
@@ -72,7 +73,7 @@ def _secret_manager_gemini_key(settings: Settings) -> str | None:
         )
         response = client.access_secret_version(request={"name": name})
         return response.payload.data.decode("utf-8")
-    except Exception:
+    except (ImportError, GoogleAPIError, AttributeError, UnicodeDecodeError, ValueError):
         return None
 
 
