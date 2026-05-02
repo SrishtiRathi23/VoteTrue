@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,6 +16,7 @@
 
 # next.js
 /.next/
+.next/
 /out/
 
 # production
@@ -29,9 +31,29 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+frontend-dev.log
+.npm-cache/
+.gcloud/
+.tmp/
+__pycache__/
+*.pyc
+chroma_db/
+backend/.venv/
+backend/.tmp/
+backend/scripts/eci_docs/
+backend/chroma_db/
+*.pdf
+*.pkl
+*.bin
+service-account.json
+.env.local
 
 # env files (can opt-in for committing if needed)
+.env
 .env*
+*.env
+backend/.env
+!.env.example
 
 # vercel
 .vercel
